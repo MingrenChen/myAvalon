@@ -1,0 +1,13 @@
+{
+  "name": "avalon",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node ./bin/www"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "socket.io": "^2.3.0",
+    "vue-socket.io": "^3.0.7"
+  }
+}
