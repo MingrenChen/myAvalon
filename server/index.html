@@ -1,0 +1,44 @@
+<body>
+    <div id="out"></div>
+    <button onclick="findNearby()">find nearby</button>
+</body>
+
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io.connect('http://localhost:3000');
+    const output = document.getElementById("out");
+
+
+    if (!navigator.geolocation){
+        output.innerHTML = "<p>您的浏览器不支持地理位置</p>";
+    }
+
+    function success(position) {
+        const lat = position.coords.latitude;
+        const long = position.coords.longitude;
+
+        socket.emit("report_location", {latitude: lat, longitude: long})
+
+        output.innerHTML = '<p>Latitude is ' + lat + '° <br>Longitude is ' + long + '°</p>' +
+            '<div hidden id="lat">' + lat + '</div>' + '<div hidden id="long">' + long + '</div>';
+        var img = new Image();
+        output.appendChild(img);
+    };
+
+    function error() {
+        output.innerHTML = "无法获取您的位置";
+    };
+
+    output.innerHTML = "<p>Locating…</p>";
+    navigator.geolocation.getCurrentPosition(success, error);
+
+    findNearby = () => {
+        socket.emit("find_nearby")
+    }
+
+    socket.on("nearby_devices", result => {
+        console.log(result)
+    })
+
+</script>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+
+    <meta charset="UTF-8">
+    <title>Avalon - Tool</title>
+</head>
+<body>
+    <div id="app">
+        <label v-if="!connected">
+            <input v-model="username" placeholder="input your name">
+            <button @click="connect">connect</button>
+        </label>
+        <div v-else>
+            <div v-if="Object.keys(players).length !== 2">
+                等待其他玩家进入
+            </div>
+
+            <div v-else>
+                <button v-if="!start" @click="start=true">查看身份</button>
+                <div v-if="start">{{hint}}</div>
+            </div>
+            <ul>
+                <li v-for="player in this.players">
+                    <player :player="player" :selected="playerIsInCar(player)"
+                            :is-captain="isCaptain" ></player>
+                </li>
+            </ul>
+            <label v-if="isCaptain && !showVoting">
+                <button @click="car">这些人出车！</button>
+            </label>
+            <div v-if="showVoting">
+                <button @click="voteForCar(true)">开车</button>
+                <button @click="voteForCar(false)">不开车</button>
+            </div>
+            <voting-result :voting="voting"></voting-result>
+        </div>
+
+
+    </div>
+</body>
+</html>
+
+<script>
+    var app = new Vue({
+        el: '#app',
+        data: {
+            username: '',
+            conn: null,
+            connected: false,
+            players: [],
+            start: false,
+            candidates: [],
+            showVoting: false,
+            voting: []
+        },
+        watch: {
+            voting: function () {
+
+            }
+        },
+        mounted() {
+            this.conn = io.connect('http://localhost:3000');
+            this.conn.on('update_players', data => {
+                this.players = data.players
+                this.captain = data.captain
+                this.candidates = data.candidates
+                this.voting = data.voting
+            })
+            this.conn.on("startVoting", ()=>{
+                this.showVoting = true
+            })
+            this.conn.on('votingEnd', ()=>{
+                this.candidates = []
+            })
+        },
+        computed: {
+            isCaptain: function(){
+                if (this.start && this.captain === this.currentPlayer.index) {
+                    return true
+                }
+                return false
+            },
+
+            currentPlayer: function(){
+                return Object.values(this.players).filter(player => {
+                    if (player.username === this.username) {
+                        return player
+                    }
+                })[0]
+            },
+            hint: function () {
+                let result = ["队长是", this.captain,', \n',
+                    '你是', this.username, "你的身份是",
+                    this.currentPlayer.character, ", \n",]// this.hintString]
+                return result.join(" ")
+            },
+            hintString: function () {
+                if (this.currentPlayer.character === '梅林'){
+                    return this.getCharacter("莫甘娜").username + " " +
+                        this.getCharacter("奥伯伦").username + " " +
+                        this.getCharacter("刺客").username +  " " +
+                        "是坏人，还有一个坏人你不知道是谁"
+                }
+                else if (['莫甘娜', '莫德雷德', '刺客'].includes(this.currentPlayer.character)){
+                    return this.getCharacter("莫德雷德").username + " " +
+                        this.getCharacter("莫甘娜").username + " " +
+                        this.getCharacter("刺客").username + " " +
+                        "你们是坏人同伙，还有一个坏人你不知道是谁。"
+                } else if (this.currentPlayer.character === '派西维尔') {
+                    return this.getCharacter("梅林").username + " " +
+                        this.getCharacter("莫甘娜").username + " " +
+                        "他们一个是梅林，一个是莫甘娜，但你不知道谁是谁。"
+                } else if (["梅林的忠臣-大胸-女", "梅林的忠臣"].includes(this.currentPlayer.character)){
+                    return "你要保护梅林并完成任务"
+                } else {
+                    return "你是坏人，破坏任务吧"
+                }
+            },
+        },
+        methods: {
+            connect: function () {
+                this.conn.emit('player_connect', {username: this.username})
+                this.connected = true
+            },
+            getCharacter: function(character){
+                return Object.values(this.players).filter(player => {
+                    if (player.character === character) {
+                        return player
+                    }
+                })[0]
+            },
+
+            addCandidate: function (player) {
+                if (!this.candidates.includes(player)) {
+                    this.candidates.push(player)
+                } else {
+                    this.candidates = this.candidates.filter(el => el !== player)
+                }
+            },
+            car: function () {
+                this.conn.emit('car', {candidates:this.candidates})
+            },
+            playerIsInCar: function(player){
+                return (this.candidates.filter(candidate =>
+                    candidate.username === player.username
+                ).length > 0)
+            },
+            voteForCar: function (car) {
+                this.conn.emit('voteforcar', car)
+                this.showVoting = false
+            }
+        }
+    })
+
+    Vue.component('player', {
+        props: ['player', 'selected', 'isCaptain'],
+        data: function(){
+            return {
+                selectedByMe: false
+            }
+        },
+        computed: {
+            getStyle: function () {
+                if (this.selectedByMe || this.selected) return {color: 'red'}
+                else return {color: 'black'}
+            }
+        },
+        methods: {
+            playerClick: function () {
+                if (this.isCaptain) {
+                    this.selectedByMe = !this.selectedByMe
+                    this.$parent.addCandidate(this.player)
+                }
+            }
+        },
+        template: '<div @click="playerClick" :style="getStyle">' +
+            '          <span v-if="player.index">{{player.index + "号" + player.username}}</span>' +
+            '          <span v-else>{{player.username}}</span>' +
+            '      </div>'
+    })
+
+    Vue.component('voting-result', {
+        props: ['voting'],
+        data: function(){
+            return {
+            }
+        },
+        computed: {
+            go: function () {
+                let lastRound = this.voting
+            }
+        },
+        methods: {
+
+        },
+        template:
+            '<div>' +
+                '<ul v-for="round, index in voting">' +
+                    '<div>第{{index}}轮: ' +
+                    '投成功票: {{round.true}}<br>'+
+                    '投反对票: {{round.false}}'+
+                    '</div>' +
+                '</ul>' +
+            '</div>'
+    })
+
+</script>
